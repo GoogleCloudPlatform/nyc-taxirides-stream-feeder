@@ -20,11 +20,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"time"
 
 	"cloud.google.com/go/pubsub"
-	"google.golang.org/api/option"
 )
 
 // PubSubClient is an authenticated Cloud Pub/Sub client
@@ -37,23 +34,17 @@ type PubSubClient struct {
 // NewPubSubService creates new authenticated Cloud Pub/Sub client with the given
 // service account. If no service account is provided, the default
 // auth context is used.
-func NewPubSubService(svcAccJSON string, projectID string, topic string, debugLog debugging) (*PubSubClient, error) {
+func NewPubSubService(conf *config, debugLog debugging) (*PubSubClient, error) {
 	debugLog.Println("Connecting to Google Cloud Pub/Sub ...")
-	var opts []option.ClientOption
-	if _, err := os.Stat(svcAccJSON); err == nil {
-		opts = append(opts, option.WithServiceAccountFile(svcAccJSON))
-	}
+	ctx := context.Background()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	c, err := pubsub.NewClient(ctx, projectID, opts...)
+	c, err := pubsub.NewClient(ctx, conf.ProjectID)
 	if err != nil {
 		return nil, err
 	}
 
-	debugLog.Printf("Checking if Pub/Sub topic '%s' exists ...\n", topic)
-	t := c.Topic(topic)
+	debugLog.Printf("Checking if Pub/Sub topic '%s' exists ...\n", conf.Topic)
+	t := c.Topic(conf.Topic)
 	ok, err := t.Exists(ctx)
 	if err != nil {
 		err2 := c.Close()
@@ -68,7 +59,7 @@ func NewPubSubService(svcAccJSON string, projectID string, topic string, debugLo
 		if err != nil {
 			log.Println(err)
 		}
-		return nil, fmt.Errorf("Topic %v doesn't exist", topic)
+		return nil, fmt.Errorf("Topic %v doesn't exist", conf.Topic)
 	}
 
 	debugLog.Println("Connection to Google Cloud Pub/Sub successful.")

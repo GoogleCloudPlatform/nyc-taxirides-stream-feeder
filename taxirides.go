@@ -162,18 +162,18 @@ func (tr *taxiRide) ridePoints(refTime time.Time, timeOffset time.Duration, spee
 	return taxiRidePoints, nil
 }
 
-func (tr *taxiRide) valid() bool {
+func (tr *taxiRide) valid(m *metrics) bool {
 	pt := time.Time(tr.TPepPickupDatetime)
 	dt := time.Time(tr.TPepDropoffDatetime)
 
 	if pt.IsZero() || dt.IsZero() {
-		schedDebugCounter.Add(ridesInvalidKey, 1)
+		m.ridesInvalidInc()
 		return false
 	}
 
 	// if ride is longer than 6 hours declare as invalid
 	if dt.Sub(pt).Hours() > 6 {
-		schedDebugCounter.Add(ridesInvalidKey, 1)
+		m.ridesInvalidInc()
 		return false
 	}
 	return true

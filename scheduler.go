@@ -32,18 +32,15 @@ type ridePointScheduler struct {
 	speedupFactor int
 	points        []*taxiRidePoint
 	idxCount      int
+	metrics       *metrics
 	debugLog      debugging
 }
 
 func (rps *ridePointScheduler) run(ch chan<- *pubsub.Message) {
-	if rps.debugLog {
-		defer func() {
-
-			schedDebugCounter.Add(pointsFailedKey, int64(len(rps.points)))
-			schedDebugCounter.Add(ridesProcessedKey, 1)
-
-		}()
-	}
+	defer func() {
+		rps.metrics.pointsFailedAdd(len(rps.points))
+		rps.metrics.ridesProcessedInc()
+	}()
 
 	pt := time.Time(rps.taxiRide.TPepPickupDatetime)
 
@@ -61,10 +58,8 @@ func (rps *ridePointScheduler) run(ch chan<- *pubsub.Message) {
 		return
 	}
 
-	if rps.debugLog {
-		schedDebugCounter.Add(ridesLoadedKey, 1)
-		schedDebugCounter.Add(pointsLoadedKey, int64(len(rps.points)))
-	}
+	rps.metrics.ridesLoadedInc()
+	rps.metrics.pointsLoadedAdd(len(rps.points))
 
 	for {
 		// if no more point in list exit
@@ -81,9 +76,7 @@ func (rps *ridePointScheduler) run(ch chan<- *pubsub.Message) {
 		}
 		time.Sleep(timestamp.Sub(time.Now()))
 
-		if rps.debugLog {
-			schedDebugCounter.Add(pointsScheduledKey, 1)
-		}
+		rps.metrics.pointsScheduledInc()
 
 		pointJSON, err := json.Marshal(rps.points[0])
 		if err != nil {
@@ -97,10 +90,7 @@ func (rps *ridePointScheduler) run(ch chan<- *pubsub.Message) {
 		case ch <- &pubsub.Message{Data: pointJSON, Attributes: attributes}:
 			break
 		default:
-			// rps.debugLog.Println("Channel to publishing message is full. Discarding point.")
-			if rps.debugLog {
-				schedDebugCounter.Add(pointsFailedKey, 1)
-			}
+			rps.metrics.pointsFailedAdd(1)
 		}
 		rps.idxCount++
 		// remove handled point from list

@@ -61,6 +61,7 @@ You can then use the following command to run the `feeder`
 Replace `<YOUR_PROJECT_ID>` with your Google Cloud Platform [Project ID](https://console.cloud.google.com/home/dashboard).
 
 ```bash
+GOOGLE_APPLICATION_CREDENTIALS=service-account.json
 BUCKET=pubsub-public-billion-taxi-rides \
 PROJECT=<YOUR_PROJECT_ID> \
 FILEPREFIX=json/yellow_tripdata_2015-01-ext0000 \
@@ -106,8 +107,9 @@ PUBSUBTOPIC=realtime-feed\n\
 DEBUG=true" > properties.env
 ```
 
-and then run the container. You'll need a service account if you don't
-[run it on GCE](#running-the-program-on-gce).
+and then run the container. You'll need a service account and set the
+`GOOGLE_APPLICATION_CREDENTIALS=service-account.json` environment variable
+if you don't [run it on GCE](#running-the-program-on-gce).
 
 ```bash
 docker run --rm -v $PWD/service-account.json:/service-account.json --env-file=properties.env feeder:latest
@@ -197,6 +199,11 @@ same duration on all instances and re-reads the input dataset in a loop.
 restricting how much memory is used for in-memory pending schedulers. It'll
 slow down file parsing.
 
+`MAXBUFFEREDMSGS` sets the maximum outstanding messages to publish to Pub/Sub.
+Used to restrict memory usage. When buffer is full, messages get discarded.
+
+`PORT` sets port for Prometheus metrics endpoint.
+
 ```properties
 SPEEDUP=<SPEEDUP_FACTOR>\n\
 SKIPRIDES=<MODULO_N_TO_SKIP_RIDES_AND_LOWER_QPS>\n\
@@ -207,6 +214,50 @@ LOOP=[true|false]\n\
 
 There are more options available if you use your own dataset.
 Please refer to `./feeder --help` for details.
+
+## Telemetry
+
+Exposing [Prometheus](https://prometheus.io/) metrics endpoint.
+Metrics exposed are:
+
+* Rides loaded - ride_counter{type="loaded"}
+* Rides processed - ride_counter{type="processed"}
+* Rides invalid - ride_counter{type="invalid"}
+* Points loaded - point_counter{type="loaded"}
+* Points scheduled - point_counter{type="scheduled"}
+* Points failed - point_counter{type="failed"}
+* Messages sent - message_counter{type="sent"}
+* Messages failed - message_counter{type="failed"}
+* Pub/Sub backlog - pubsub_backlog
+
+To calculate rates in Prometheus you can do e.g.
+`rate(message_counter{type="sent"}[15s])`
+
+To scrape the telemetry data with Prometheus here is a minimal config
+`prometheus.yml`:
+You need to replace `<feeder-ip>` with the IP where the feeder is running.
+
+```yaml
+global:
+  scrape_interval:     15s
+  evaluation_interval: 30s
+
+scrape_configs:
+- job_name: feeder_scrape
+  scrape_interval: 5s
+  scrape_timeout:  5s
+  metrics_path: /metrics
+  static_configs:
+    - targets:
+      - <feeder-ip>:8080
+```
+
+You can run prometheus in Docker:
+
+```bash
+docker run -p 9090:9090 -v `pwd`/prometheus.yml:/prometheus.yml \
+prom/prometheus --config.file=/prometheus.yml
+```
 
 ## Filtering invalid data
 

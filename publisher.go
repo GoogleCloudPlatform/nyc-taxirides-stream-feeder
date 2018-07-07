@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	"cloud.google.com/go/pubsub"
 )
@@ -29,12 +30,13 @@ type bufferedPubsubPublisher struct {
 	client   *PubSubClient
 	debugLog debugging
 	donec    chan struct{}
+	metrics  *metrics
 }
 
-func (p *bufferedPubsubPublisher) run(ch <-chan *pubsub.Message) {
+func (p *bufferedPubsubPublisher) run(ch <-chan *pubsub.Message, maxmsgs int) {
 	p.debugLog.Printf("bufferedPubsubPublisher started...")
 	p.donec = make(chan struct{})
-	prs := make(chan *pubsub.PublishResult, 5e5)
+	prs := make(chan *pubsub.PublishResult, maxmsgs)
 	ctx := context.Background()
 	go func() {
 		for {
@@ -44,9 +46,7 @@ func (p *bufferedPubsubPublisher) run(ch <-chan *pubsub.Message) {
 					p.stop()
 					break
 				}
-				if p.debugLog {
-					pubDebugCounter.Add(publishBacklogKey, 1)
-				}
+				p.metrics.messagesBacklogInc()
 				// send response to response channel for async handling
 				prs <- p.client.topic.Publish(ctx, msg)
 
@@ -61,16 +61,14 @@ func (p *bufferedPubsubPublisher) run(ch <-chan *pubsub.Message) {
 	// pubsub response handling
 	go func() {
 		for r := range prs {
-			if id, err := r.Get(ctx); err != nil {
+			ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
+			if id, err := r.Get(ctx2); err != nil {
 				log.Printf("Error publishing message %s to pubsub: %v", id, err)
-				if p.debugLog {
-					pubDebugCounter.Add(failedMsgsKey, 1)
-				}
+				p.metrics.messagesFailedInc()
 			}
-			if p.debugLog {
-				pubDebugCounter.Add(publishBacklogKey, -1)
-				pubDebugCounter.Add(sentMsgsKey, 1)
-			}
+			cancel()
+			p.metrics.messagesBacklogDec()
+			p.metrics.messagesSentInc()
 		}
 		p.debugLog.Println("Processing publish results channel closed")
 		p.stop()

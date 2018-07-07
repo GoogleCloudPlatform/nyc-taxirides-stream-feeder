@@ -32,7 +32,7 @@ func (nopCloser) Close() error { return nil }
 var jsonRaw = "{\"rides\":[{\"total_amount\": \"6.65\", \"passenger_count\": \"3\", \"RateCodeID\": \"1\", \"dropoff_longitude\": \"-73.992393493652344\", \"VendorID\": \"2\", \"pickup_latitude\": \"40.757595062255859\", \"mta_tax\": \"0.5\", \"tpep_dropoff_datetime\": \"2015-01-04 20:03:02\", \"store_and_fwd_flag\": \"N\", \"pickup_longitude\": \"-73.989242553710938\", \"tip_amount\": \"1.35\", \"dropoff_latitude\": \"40.7625732421875\", \"improvement_surcharge\": \"0.3\", \"trip_distance\": \".50\", \"payment_type\": \"1\", \"tpep_pickup_datetime\": \"2015-01-04 20:00:40\", \"fare_amount\": \"4\", \"tolls_amount\": \"0\", \"polyline\": \"qnwwFbarbMOKOKOKQKOKOKOKOKQKOKOKOKOKOKQKOKOKOKOKQKOKOMQKOKOKQKOKOKQKOMOKQKOKGPGRGPGPGPERGPGPGRGPGPGPGRGPGPERGPGPGRGPGPGPGRGPGPERGPGPGPGRGPGRGPGRGPGRGPGRGPGRGPGRGRGPGRGPGRGPGRGPGRGPGR\", \"extra\": \"0.5\"}]}"
 
 func TestRidesFromJSONRawBytes(t *testing.T) {
-
+	timeLoc, _ = time.LoadLocation("America/New_York")
 	trs, err := ridesFromJSONRawBytes([]byte(jsonRaw))
 	if err != nil {
 		t.Error(err)
@@ -102,7 +102,8 @@ func GetRidePointsTest(t *testing.T, tr *taxiRide) {
 
 func TestIsValidTest(t *testing.T) {
 	tr1 := &taxiRide{}
-	if tr1.valid() {
+	m := NewFeederMetrics()
+	if tr1.valid(m) {
 		t.Errorf("Ride shouldn't be valid %v", tr1)
 	}
 
@@ -111,7 +112,7 @@ func TestIsValidTest(t *testing.T) {
 	tr2 := &taxiRide{
 		TPepPickupDatetime: rideTime(pt),
 	}
-	if tr2.valid() {
+	if tr2.valid(m) {
 		t.Errorf("Ride shouldn't be valid %v", tr2)
 	}
 
@@ -121,7 +122,7 @@ func TestIsValidTest(t *testing.T) {
 		TPepPickupDatetime:  rideTime(pt1),
 		TPepDropoffDatetime: rideTime(pt2),
 	}
-	if tr3.valid() {
+	if tr3.valid(m) {
 		t.Errorf("Ride shouldn't be valid %v", tr3)
 	}
 
@@ -130,7 +131,7 @@ func TestIsValidTest(t *testing.T) {
 		TPepPickupDatetime:  rideTime(pt1),
 		TPepDropoffDatetime: rideTime(pt3),
 	}
-	if !tr4.valid() {
+	if !tr4.valid(m) {
 		t.Errorf("Ride should be valid %v", tr4)
 	}
 

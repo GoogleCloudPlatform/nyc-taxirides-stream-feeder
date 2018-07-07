@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"io/ioutil"
-	"os"
 	"sort"
 	"time"
 
@@ -37,17 +36,11 @@ type GCSclient struct {
 // NewGCSService creates new authenticated Cloud Storage client with the given
 // scope and service account. If no service account is provided, the default
 // auth context is used.
-func NewGCSService(svcAccJSON string, debugLog debugging, scopes ...string) (*GCSclient, error) {
+func NewGCSService(debugLog debugging, scopes ...string) (*GCSclient, error) {
 	debugLog.Println("Connecting to Google Cloud Storage ...")
 	var opts []option.ClientOption
-	if _, err := os.Stat(svcAccJSON); err == nil {
-		opts = append(opts, option.WithServiceAccountFile(svcAccJSON))
-	}
-
 	opts = append(opts, option.WithScopes(scopes...))
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	c, err := storage.NewClient(ctx, opts...)
+	c, err := storage.NewClient(context.Background(), opts...)
 
 	if err != nil {
 		return nil, err
